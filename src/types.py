@@ -1,6 +1,7 @@
 # types.py
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Sequence
 
 
@@ -8,6 +9,7 @@ class AudioFormat(Enum):
     M4A = "m4a"
     MP3 = "mp3"
     WAV = "wav"
+    FLAC = "flac"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +28,7 @@ class DownloadConfig:
 class AudioMeta:
     title: str
     thumbnail_url: str
+    path: Path
 
 
 UrlList = Sequence[str]
