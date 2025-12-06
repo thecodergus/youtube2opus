@@ -1,0 +1,14 @@
+[project]
+name = "youtube2opus"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "yt-dlp>=2025.11.12",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+]

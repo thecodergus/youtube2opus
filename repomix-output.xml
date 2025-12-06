@@ -1,0 +1,425 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+.python-version
+main.py
+output/.gitkeep
+pyproject.toml
+README.md
+src/.gitkeep
+src/config.py
+src/downloader.py
+src/types.py
+src/utils.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".python-version">
+3.13
+</file>
+
+<file path="main.py">
+# main.py
+from src.types import DownloadConfig, AudioFormat, UrlList
+from src.utils import ensure_directory_exists
+from src.downloader import download_audio
+
+
+def main(
+    youtube_links: UrlList, output_dir: str, audio_format: AudioFormat = AudioFormat.M4A
+) -> None:
+    """
+    Orquestra o fluxo de validação, configuração e download.
+    """
+    ensure_directory_exists(output_dir)
+    config = DownloadConfig(
+        output_dir=output_dir,
+        audio_format=audio_format,
+    )
+    download_audio(youtube_links, config)
+
+
+if __name__ == "__main__":
+    youtube_links: UrlList = [
+        "https://www.youtube.com/watch?v=YLJbYcX5LWk",
+        "https://www.youtube.com/watch?v=Nw1uB_ttKt8",
+    ]
+    output_path: str = "./output"
+    main(youtube_links, output_path, audio_format=AudioFormat.MP3)
+</file>
+
+<file path="pyproject.toml">
+[project]
+name = "youtube2opus"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "yt-dlp>=2025.11.12",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+]
+</file>
+
+<file path="src/config.py">
+# config.py
+import os
+from typing import Any
+from .types import DownloadConfig
+from types import MappingProxyType
+
+
+def build_yt_dlp_options(config: DownloadConfig) -> dict[str, object]:
+    """
+    Função pura: constrói o dicionário de opções do yt-dlp a partir da configuração tipada.
+    Retorna um dict mutável, compatível com a API do yt-dlp.
+    """
+    return {
+        "format": f"bestaudio[ext={config.audio_format.value}]/bestaudio/best",
+        "outtmpl": os.path.join(config.output_dir, config.filename_template),
+        "writethumbnail": config.embed_thumbnail,
+        "embedthumbnail": config.embed_thumbnail,
+        "addmetadata": config.add_metadata,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": config.audio_format.value,
+                "preferredquality": "0",
+            },
+            {"key": "EmbedThumbnail"},
+            {"key": "FFmpegMetadata"},
+        ],
+        "noplaylist": config.noplaylist,
+        "quiet": config.quiet,
+        "restrictfilenames": config.restrict_filenames,
+    }
+</file>
+
+<file path="src/downloader.py">
+# downloader.py
+import yt_dlp
+from typing import Sequence
+from .types import DownloadConfig
+from config import build_yt_dlp_options
+
+
+def download_audio(urls: Sequence[str], config: DownloadConfig) -> None:
+    """
+    Executa o download dos áudios a partir de uma lista de URLs, usando a configuração fornecida.
+    """
+    if not urls:
+        print("Nenhum link fornecido para download.")
+        return
+    options = build_yt_dlp_options(config)
+    with yt_dlp.YoutubeDL(options) as ydl:  # type: ignore
+        ydl.download(list(urls))
+</file>
+
+<file path="src/types.py">
+# types.py
+from dataclasses import dataclass
+from enum import Enum
+from typing import Sequence
+
+
+class AudioFormat(Enum):
+    M4A = "m4a"
+    MP3 = "mp3"
+    WAV = "wav"
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadConfig:
+    output_dir: str
+    audio_format: AudioFormat = AudioFormat.M4A
+    filename_template: str = "%(title)s.%(ext)s"
+    embed_thumbnail: bool = True
+    add_metadata: bool = True
+    restrict_filenames: bool = True
+    quiet: bool = False
+    noplaylist: bool = True
+
+
+UrlList = Sequence[str]
+</file>
+
+<file path="src/utils.py">
+# file_utils.py
+import os
+
+
+def ensure_directory_exists(path: str) -> None:
+    """
+    Garante que o diretório existe, criando-o se necessário.
+    """
+    os.makedirs(path, exist_ok=True)
+</file>
+
+<file path=".gitignore">
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# UV
+#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#uv.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+#poetry.toml
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
+#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
+#pdm.lock
+#pdm.toml
+.pdm-python
+.pdm-build/
+
+# pixi
+#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
+#pixi.lock
+#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
+#   in the .venv directory. It is recommended not to include this directory in version control.
+.pixi
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.envrc
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+# Abstra
+# Abstra is an AI-powered process automation framework.
+# Ignore directories containing user credentials, local state, and settings.
+# Learn more at https://abstra.io/docs
+.abstra/
+
+# Visual Studio Code
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
+#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  you could uncomment the following to ignore the entire vscode folder
+# .vscode/
+
+# Ruff stuff:
+.ruff_cache/
+
+# PyPI configuration file
+.pypirc
+
+# Cursor
+#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
+#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
+#  refer to https://docs.cursor.com/context/ignore-files
+.cursorignore
+.cursorindexingignore
+
+# Marimo
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+
+# Formatos de audio
+*.m4a
+*.mp3
+*.opus
+uv.lock
+</file>
+
+<file path="README.md">
+# youtube2opus
+</file>
+
+</files>
