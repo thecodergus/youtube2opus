@@ -1,8 +1,6 @@
 from typing import Sequence
 from pathlib import Path
 from src.downloader import download_audio
-from src.denoiser import denoise_wav
-from src.superres import super_resolve_wav
 from src.encoder import wav_to_flac_with_thumbnail
 from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
@@ -24,16 +22,6 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         result: DownloadResult = download_audio(url, output_dir)
         print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
-        # 2. Denoising
-        # denoised_path = Path(output_dir) / f"""{result.title}_denoised.wav"""
-        # denoise_wav(str(result.audio_path), str(denoised_path))
-        # print(f"  🧹 Denoising concluído: {denoised_path.name}")
-
-        # # 3. Super-Resolução
-        # superres_path = Path(output_dir) / f"""{result.title}_superres.wav"""
-        # super_resolve_wav(str(denoised_path), str(superres_path))
-        # print(f"  🚀 Super-resolução concluída: {superres_path.name}")
-
         # 4. FLAC + Thumbnail
         flac_path = Path(output_dir) / f"{result.title}.flac"
         wav_to_flac_with_thumbnail(
@@ -45,6 +33,6 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         print(f"  💾 FLAC salvo: {flac_path.name}")
 
         # Limpeza de arquivos temporários
-        cleanup_temp_files([denoised_path, result.audio_path, result.audio_path])  # type: ignore
+        cleanup_temp_files([Path(result.audio_path), Path(result.audio_path)])
         # except Exception as e:
         #     print(f"❌ Erro ao processar {url}: {e}")
