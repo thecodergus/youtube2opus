@@ -3,8 +3,11 @@ name = "youtube2opus"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "audiosr>=0.0.7",
+    "deepfilternet>=0.5.6",
+    "pydub>=0.25.1",
     "yt-dlp>=2025.11.12",
 ]
 
