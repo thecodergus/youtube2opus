@@ -1,14 +1,11 @@
-# config.py
+# src/config.py
 import os
-from typing import Any
-from .types import DownloadConfig
-from types import MappingProxyType
+from .types import DownloadConfig, AudioFormat
 
 
 def build_yt_dlp_options(config: DownloadConfig) -> dict[str, object]:
     """
     Função pura: constrói o dicionário de opções do yt-dlp a partir da configuração tipada.
-    Retorna um dict mutável, compatível com a API do yt-dlp.
     """
     return {
         "format": f"bestaudio[ext={config.audio_format.value}]/bestaudio/best",

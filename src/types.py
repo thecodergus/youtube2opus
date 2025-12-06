@@ -13,13 +13,19 @@ class AudioFormat(Enum):
 @dataclass(frozen=True, slots=True)
 class DownloadConfig:
     output_dir: str
-    audio_format: AudioFormat = AudioFormat.M4A
+    audio_format: AudioFormat = AudioFormat.WAV
     filename_template: str = "%(title)s.%(ext)s"
     embed_thumbnail: bool = True
     add_metadata: bool = True
     restrict_filenames: bool = True
     quiet: bool = False
     noplaylist: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class AudioMeta:
+    title: str
+    thumbnail_url: str
 
 
 UrlList = Sequence[str]
