@@ -25,19 +25,19 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
         # 2. Denoising
-        denoised_path = Path(output_dir) / f"""{result.title}_denoised.wav"""
-        denoise_wav(str(result.audio_path), str(denoised_path))
-        print(f"  🧹 Denoising concluído: {denoised_path.name}")
+        # denoised_path = Path(output_dir) / f"""{result.title}_denoised.wav"""
+        # denoise_wav(str(result.audio_path), str(denoised_path))
+        # print(f"  🧹 Denoising concluído: {denoised_path.name}")
 
-        # 3. Super-Resolução
-        superres_path = Path(output_dir) / f"""{result.title}_superres.wav"""
-        super_resolve_wav(str(denoised_path), str(superres_path))
-        print(f"  🚀 Super-resolução concluída: {superres_path.name}")
+        # # 3. Super-Resolução
+        # superres_path = Path(output_dir) / f"""{result.title}_superres.wav"""
+        # super_resolve_wav(str(denoised_path), str(superres_path))
+        # print(f"  🚀 Super-resolução concluída: {superres_path.name}")
 
         # 4. FLAC + Thumbnail
         flac_path = Path(output_dir) / f"{result.title}.flac"
         wav_to_flac_with_thumbnail(
-            wav_path=str(superres_path),
+            wav_path=str(result.audio_path),
             flac_path=str(flac_path),
             thumbnail_url=result.thumbnail_url,
             title=result.title,
@@ -45,6 +45,6 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         print(f"  💾 FLAC salvo: {flac_path.name}")
 
         # Limpeza de arquivos temporários
-        cleanup_temp_files([denoised_path, superres_path, result.audio_path])  # type: ignore
+        cleanup_temp_files([denoised_path, result.audio_path, result.audio_path])  # type: ignore
         # except Exception as e:
         #     print(f"❌ Erro ao processar {url}: {e}")
