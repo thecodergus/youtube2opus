@@ -26,12 +26,12 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
             print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
             # 2. Denoising
-            denoised_path = Path(output_dir) / f"{result.title}_denoised.wav"
+            denoised_path = Path(output_dir) / f"""{result.title}_denoised.wav"""
             denoise_wav(str(result.audio_path), str(denoised_path))
             print(f"  🧹 Denoising concluído: {denoised_path.name}")
 
             # 3. Super-Resolução
-            superres_path = Path(output_dir) / f"{result.title}_superres.wav"
+            superres_path = Path(output_dir) / f"""{result.title}_superres.wav"""
             super_resolve_wav(str(denoised_path), str(superres_path))
             print(f"  🚀 Super-resolução concluída: {superres_path.name}")
 

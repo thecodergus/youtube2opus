@@ -212,3 +212,7 @@ __marimo__/
 *.mp3
 *.opus
 uv.lock
+
+# Fromato de audio
+*.wav
+*.webp

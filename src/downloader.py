@@ -11,7 +11,7 @@ def download_audio(url: str, output_dir: str) -> DownloadResult:
     """
     ydl_opts = {
         "format": "bestaudio/best",
-        "outtmpl": f"{output_dir}/%(title)s.%(ext)s",
+        "outtmpl": f"""{output_dir}/%(title)s.%(ext)s""",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
