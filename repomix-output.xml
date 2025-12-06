@@ -48,7 +48,10 @@ pyproject.toml
 README.md
 src/.gitkeep
 src/config.py
+src/denoiser.py
 src/downloader.py
+src/encoder.py
+src/superres.py
 src/types.py
 src/utils.py
 </directory_structure>
@@ -56,137 +59,40 @@ src/utils.py
 <files>
 This section contains the contents of the repository's files.
 
-<file path=".python-version">
-3.13
+<file path="README.md">
+# youtube2opus
 </file>
 
-<file path="main.py">
-# main.py
-from src.types import DownloadConfig, AudioFormat, UrlList
-from src.utils import ensure_directory_exists
-from src.downloader import download_audio
+<file path="src/superres.py">
+# superres.py
+from typing import Final
+from audiosr import build_model, super_resolution, save_wave
 
 
-def main(
-    youtube_links: UrlList, output_dir: str, audio_format: AudioFormat = AudioFormat.M4A
+def super_resolve_wav(
+    input_wav: str, output_wav: str, model_name: str = "basic", device: str = "cpu"
 ) -> None:
     """
-    Orquestra o fluxo de validação, configuração e download.
+    Aplica super-resolução de áudio usando AudioSR.
+    - model_name: "basic" (música) ou "speech" (voz)
+    - device: "cuda" ou "cpu"
     """
-    ensure_directory_exists(output_dir)
-    config = DownloadConfig(
-        output_dir=output_dir,
-        audio_format=audio_format,
+    model = build_model(model_name=model_name, device=device)
+    waveform = super_resolution(
+        model,
+        input_wav,
+        seed=42,
+        guidance_scale=3.5,
+        ddim_steps=50,
+        latent_t_per_second=25,
     )
-    download_audio(youtube_links, config)
-
-
-if __name__ == "__main__":
-    youtube_links: UrlList = [
-        "https://www.youtube.com/watch?v=YLJbYcX5LWk",
-        "https://www.youtube.com/watch?v=Nw1uB_ttKt8",
-    ]
-    output_path: str = "./output"
-    main(youtube_links, output_path, audio_format=AudioFormat.MP3)
-</file>
-
-<file path="pyproject.toml">
-[project]
-name = "youtube2opus"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "yt-dlp>=2025.11.12",
-]
-
-[dependency-groups]
-dev = [
-    "black>=25.11.0",
-]
-</file>
-
-<file path="src/config.py">
-# config.py
-import os
-from typing import Any
-from .types import DownloadConfig
-from types import MappingProxyType
-
-
-def build_yt_dlp_options(config: DownloadConfig) -> dict[str, object]:
-    """
-    Função pura: constrói o dicionário de opções do yt-dlp a partir da configuração tipada.
-    Retorna um dict mutável, compatível com a API do yt-dlp.
-    """
-    return {
-        "format": f"bestaudio[ext={config.audio_format.value}]/bestaudio/best",
-        "outtmpl": os.path.join(config.output_dir, config.filename_template),
-        "writethumbnail": config.embed_thumbnail,
-        "embedthumbnail": config.embed_thumbnail,
-        "addmetadata": config.add_metadata,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": config.audio_format.value,
-                "preferredquality": "0",
-            },
-            {"key": "EmbedThumbnail"},
-            {"key": "FFmpegMetadata"},
-        ],
-        "noplaylist": config.noplaylist,
-        "quiet": config.quiet,
-        "restrictfilenames": config.restrict_filenames,
-    }
-</file>
-
-<file path="src/downloader.py">
-# downloader.py
-import yt_dlp
-from typing import Sequence
-from .types import DownloadConfig
-from config import build_yt_dlp_options
-
-
-def download_audio(urls: Sequence[str], config: DownloadConfig) -> None:
-    """
-    Executa o download dos áudios a partir de uma lista de URLs, usando a configuração fornecida.
-    """
-    if not urls:
-        print("Nenhum link fornecido para download.")
-        return
-    options = build_yt_dlp_options(config)
-    with yt_dlp.YoutubeDL(options) as ydl:  # type: ignore
-        ydl.download(list(urls))
-</file>
-
-<file path="src/types.py">
-# types.py
-from dataclasses import dataclass
-from enum import Enum
-from typing import Sequence
-
-
-class AudioFormat(Enum):
-    M4A = "m4a"
-    MP3 = "mp3"
-    WAV = "wav"
-
-
-@dataclass(frozen=True, slots=True)
-class DownloadConfig:
-    output_dir: str
-    audio_format: AudioFormat = AudioFormat.M4A
-    filename_template: str = "%(title)s.%(ext)s"
-    embed_thumbnail: bool = True
-    add_metadata: bool = True
-    restrict_filenames: bool = True
-    quiet: bool = False
-    noplaylist: bool = True
-
-
-UrlList = Sequence[str]
+    save_wave(
+        waveform,
+        inputpath=input_wav,
+        savepath=".",
+        name=output_wav.removesuffix(".wav"),
+        samplerate=48_000,
+    )
 </file>
 
 <file path="src/utils.py">
@@ -418,8 +324,299 @@ __marimo__/
 uv.lock
 </file>
 
-<file path="README.md">
-# youtube2opus
+<file path=".python-version">
+3.11
+</file>
+
+<file path="src/config.py">
+# src/config.py
+import os
+from .types import DownloadConfig, AudioFormat
+
+
+def build_yt_dlp_options(config: DownloadConfig) -> dict[str, object]:
+    """
+    Função pura: constrói o dicionário de opções do yt-dlp a partir da configuração tipada.
+    """
+    return {
+        "format": f"bestaudio[ext={config.audio_format.value}]/bestaudio/best",
+        "outtmpl": os.path.join(config.output_dir, config.filename_template),
+        "writethumbnail": config.embed_thumbnail,
+        "embedthumbnail": config.embed_thumbnail,
+        "addmetadata": config.add_metadata,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": config.audio_format.value,
+                "preferredquality": "0",
+            },
+            {"key": "EmbedThumbnail"},
+            {"key": "FFmpegMetadata"},
+        ],
+        "noplaylist": config.noplaylist,
+        "quiet": config.quiet,
+        "restrictfilenames": config.restrict_filenames,
+    }
+</file>
+
+<file path="src/denoiser.py">
+# denoiser.py
+from typing import Final
+from df.enhance import enhance, init_df, load_audio, save_audio
+
+
+def denoise_wav(input_wav: str, output_wav: str) -> None:
+    """
+    Aplica denoising ao arquivo WAV usando DeepFilterNet (df) conforme documentação oficial.
+    Função pura, imutável e auditável.
+    """
+    model, df_state, _ = init_df(
+        default_model="DeepFilterNet3"
+    )  # Carrega modelo padrão (DeepFilterNet2)
+    audio, _ = load_audio(input_wav, sr=df_state.sr())
+    enhanced = enhance(model, df_state, audio)
+    save_audio(output_wav, enhanced, df_state.sr())
+</file>
+
+<file path="src/downloader.py">
+# src/downloader.py
+import yt_dlp
+from typing import Sequence
+from .types import DownloadConfig, AudioMeta
+from .config import build_yt_dlp_options
+
+
+def download_audio(urls: Sequence[str], config: DownloadConfig) -> list[AudioMeta]:
+    """
+    Baixa áudios do YouTube em WAV e retorna metadados (título, thumbnail).
+    Função pura: não muta estado global.
+    """
+    if not urls:
+        print("Nenhum link fornecido para download.")
+        return []
+    options = build_yt_dlp_options(config)
+    metas: list[AudioMeta] = []
+    with yt_dlp.YoutubeDL(options) as ydl:  # type: ignore
+        for url in urls:
+            info = ydl.extract_info(url, download=True)
+            metas.append(
+                AudioMeta(
+                    title=info.get("title", "unknown"),  # type: ignore
+                    thumbnail_url=info.get("thumbnail", ""),  # type: ignore
+                )
+            )
+    return metas
+</file>
+
+<file path="src/encoder.py">
+# encoder.py
+from typing import Final
+from pydub import AudioSegment
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3
+from mutagen.id3._frames import APIC, TIT2
+from mutagen.id3._util import error
+import requests
+from mutagen.flac import FLAC, Picture
+import requests
+import mimetypes
+
+
+def wav_to_mp3_with_thumbnail(
+    wav_path: str, mp3_path: str, thumbnail_url: str, title: str
+) -> None:
+    """
+    Converte WAV para MP3 320kbps e embute thumbnail e título usando mutagen.
+    """
+    # Conversão WAV → MP3
+    audio = AudioSegment.from_wav(wav_path)
+    audio.export(mp3_path, format="mp3", bitrate="320k")
+
+    # Download da thumbnail
+    response = requests.get(thumbnail_url, timeout=10)
+    response.raise_for_status()
+    image_data = response.content
+
+    # Adiciona tags ID3 (capa e título)
+    audio_mp3 = MP3(mp3_path, ID3=ID3)
+    try:
+        audio_mp3.add_tags()
+    except error:
+        pass  # Tags já existem
+
+    audio_mp3.add_tags(
+        APIC(
+            encoding=3,  # UTF-8
+            mime="image/jpeg",  # ou "image/png" conforme thumbnail
+            type=3,  # Cover (front)
+            desc="Cover",
+            data=image_data,
+        )
+    )
+    audio_mp3.add_tags(TIT2(encoding=3, text=title))
+    audio_mp3.save()
+
+
+def wav_to_flac_with_thumbnail(
+    wav_path: str, flac_path: str, thumbnail_url: str, title: str
+) -> None:
+    """
+    Converte um arquivo WAV para FLAC, embutindo título (Vorbis Comment) e thumbnail (METADATA_BLOCK_PICTURE).
+    - Utiliza pydub para conversão lossless.
+    - Baixa thumbnail de URL e embute como capa.
+    - Adiciona título como Vorbis Comment.
+    - Segue princípios funcionais: função pura, imutável, defensiva.
+    - Compatível com Python 3.13+ e padrões FLAC.
+    """
+    # 1. Conversão WAV → FLAC (lossless)
+    audio: Final[AudioSegment] = AudioSegment.from_wav(wav_path)
+    audio.export(flac_path, format="flac")
+
+    # 2. Download da thumbnail (com detecção de MIME)
+    response: Final[requests.Response] = requests.get(thumbnail_url, timeout=10)
+    response.raise_for_status()
+    image_data: Final[bytes] = response.content
+    # Detecta MIME a partir da URL ou conteúdo
+    mime_type: str = mimetypes.guess_type(thumbnail_url)[0] or "image/jpeg"
+
+    # 3. Adiciona metadados FLAC (Vorbis Comments + Picture)
+    flac_audio: Final[FLAC] = FLAC(flac_path)
+    flac_audio["title"] = title  # Vorbis Comment
+
+    # Remove imagens antigas para garantir imutabilidade
+    flac_audio.clear_pictures()
+
+    # Cria bloco de imagem (Picture)
+    picture: Final[Picture] = Picture()
+    picture.data = image_data
+    picture.type = 3  # 3 = Cover (front)
+    picture.mime = mime_type
+    picture.desc = "Cover"
+    # Opcional: definir dimensões se necessário (não obrigatório)
+    # picture.width = ...
+    # picture.height = ...
+    # picture.depth = ...
+
+    flac_audio.add_picture(picture)
+    flac_audio.save()
+</file>
+
+<file path="main.py">
+# audio_pipeline.py
+from typing import Final
+from src.denoiser import denoise_wav
+from src.superres import super_resolve_wav
+from src.encoder import wav_to_mp3_with_thumbnail
+from src.types import DownloadConfig, AudioFormat, UrlList
+from src.utils import ensure_directory_exists
+from src.downloader import download_audio
+
+
+def process_audio_pipeline(
+    input_wav: str,
+    output_mp3: str,
+    thumbnail_url: str,
+    title: str,
+    temp_denoised: str = "temp_denoised.wav",
+    temp_superres: str = "temp_superres.wav",
+) -> None:
+    """
+    Pipeline: Denoising → Super-Resolução → MP3 + Thumbnail
+    """
+    denoise_wav(input_wav, temp_denoised)
+    super_resolve_wav(temp_denoised, temp_superres)
+    wav_to_mp3_with_thumbnail(temp_superres, output_mp3, thumbnail_url, title)
+
+
+# if __name__ == "__main__":
+#     # Exemplo de uso
+#     process_audio_pipeline(
+#         input_wav="input.wav",
+#         output_mp3="output.mp3",
+#         thumbnail_url="https://i.ytimg.com/vi/VIDEO_ID/maxresdefault.jpg",
+#         title="Título da Música",
+#     )
+
+
+def main(
+    youtube_links: UrlList, output_dir: str, audio_format: AudioFormat = AudioFormat.M4A
+) -> None:
+    """
+    Orquestra o fluxo de validação, configuração e download.
+    """
+    ensure_directory_exists(output_dir)
+    config = DownloadConfig(
+        output_dir=output_dir,
+        audio_format=audio_format,
+    )
+    download_audio(youtube_links, config)
+
+
+if __name__ == "__main__":
+    youtube_links: UrlList = [
+        "https://www.youtube.com/watch?v=YLJbYcX5LWk",
+        "https://www.youtube.com/watch?v=Nw1uB_ttKt8",
+    ]
+    output_path: str = "./output"
+    main(youtube_links, output_path, audio_format=AudioFormat.MP3)
+</file>
+
+<file path="pyproject.toml">
+[project]
+name = "youtube2opus"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "audiosr>=0.0.7",
+    "deepfilternet>=0.5.6",
+    "mutagen>=1.47.0",
+    "pydub>=0.25.1",
+    "yt-dlp>=2025.11.12",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+]
+</file>
+
+<file path="src/types.py">
+# types.py
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Sequence
+
+
+class AudioFormat(Enum):
+    M4A = "m4a"
+    MP3 = "mp3"
+    WAV = "wav"
+    FLAC = "flac"
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadConfig:
+    output_dir: str
+    audio_format: AudioFormat = AudioFormat.WAV
+    filename_template: str = "%(title)s.%(ext)s"
+    embed_thumbnail: bool = True
+    add_metadata: bool = True
+    restrict_filenames: bool = True
+    quiet: bool = False
+    noplaylist: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class AudioMeta:
+    title: str
+    thumbnail_url: str
+    path: Path
+
+
+UrlList = Sequence[str]
 </file>
 
 </files>

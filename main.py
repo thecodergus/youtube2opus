@@ -1,57 +1,59 @@
-# audio_pipeline.py
-from typing import Final
+# main.py
+from typing import Sequence
+from pathlib import Path
+from src.downloader import download_audio
 from src.denoiser import denoise_wav
 from src.superres import super_resolve_wav
-from src.encoder import wav_to_mp3_with_thumbnail
-from src.types import DownloadConfig, AudioFormat, UrlList
-from src.utils import ensure_directory_exists
-from src.downloader import download_audio
+from src.encoder import wav_to_flac_with_thumbnail
+from src.types import DownloadResult
+from src.utils import ensure_directory_exists, cleanup_temp_files
 
 
-def process_audio_pipeline(
-    input_wav: str,
-    output_mp3: str,
-    thumbnail_url: str,
-    title: str,
-    temp_denoised: str = "temp_denoised.wav",
-    temp_superres: str = "temp_superres.wav",
-) -> None:
+def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     """
-    Pipeline: Denoising → Super-Resolução → MP3 + Thumbnail
-    """
-    denoise_wav(input_wav, temp_denoised)
-    super_resolve_wav(temp_denoised, temp_superres)
-    wav_to_mp3_with_thumbnail(temp_superres, output_mp3, thumbnail_url, title)
-
-
-# if __name__ == "__main__":
-#     # Exemplo de uso
-#     process_audio_pipeline(
-#         input_wav="input.wav",
-#         output_mp3="output.mp3",
-#         thumbnail_url="https://i.ytimg.com/vi/VIDEO_ID/maxresdefault.jpg",
-#         title="Título da Música",
-#     )
-
-
-def main(
-    youtube_links: UrlList, output_dir: str, audio_format: AudioFormat = AudioFormat.M4A
-) -> None:
-    """
-    Orquestra o fluxo de validação, configuração e download.
+    Processa uma lista de links do YouTube:
+    1. Baixa o áudio e thumbnail
+    2. Aplica denoising
+    3. Aplica super-resolução
+    4. Salva em FLAC com thumbnail
     """
     ensure_directory_exists(output_dir)
-    config = DownloadConfig(
-        output_dir=output_dir,
-        audio_format=audio_format,
-    )
-    download_audio(youtube_links, config)
+    for url in links:
+        print(f"\n🎬 Processando: {url}")
+        try:
+            # 1. Download
+            result: DownloadResult = download_audio(url, output_dir)
+            print(f"  ⬇️  Baixado: {result.audio_path.title}")
+
+            # 2. Denoising
+            denoised_path = Path(output_dir) / f"{result.title}_denoised.wav"
+            denoise_wav(str(result.audio_path), str(denoised_path))
+            print(f"  🧹 Denoising concluído: {denoised_path.name}")
+
+            # 3. Super-Resolução
+            superres_path = Path(output_dir) / f"{result.title}_superres.wav"
+            super_resolve_wav(str(denoised_path), str(superres_path))
+            print(f"  🚀 Super-resolução concluída: {superres_path.name}")
+
+            # 4. FLAC + Thumbnail
+            flac_path = Path(output_dir) / f"{result.title}.flac"
+            wav_to_flac_with_thumbnail(
+                wav_path=str(superres_path),
+                flac_path=str(flac_path),
+                thumbnail_url=result.thumbnail_url,
+                title=result.title,
+            )
+            print(f"  💾 FLAC salvo: {flac_path.name}")
+
+            # Limpeza de arquivos temporários
+            cleanup_temp_files([denoised_path, superres_path, result.audio_path])  # type: ignore
+        except Exception as e:
+            print(f"❌ Erro ao processar {url}: {e}")
 
 
 if __name__ == "__main__":
-    youtube_links: UrlList = [
-        "https://www.youtube.com/watch?v=YLJbYcX5LWk",
+    # Exemplo de uso: forneça sua lista de links aqui
+    youtube_links = [
         "https://www.youtube.com/watch?v=Nw1uB_ttKt8",
     ]
-    output_path: str = "./output"
-    main(youtube_links, output_path, audio_format=AudioFormat.MP3)
+    process_youtube_links(youtube_links, output_dir="./output")

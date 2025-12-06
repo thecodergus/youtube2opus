@@ -31,4 +31,11 @@ class AudioMeta:
     path: Path
 
 
+@dataclass(frozen=True, slots=True)
+class DownloadResult:
+    audio_path: str
+    title: str
+    thumbnail_url: str
+
+
 UrlList = Sequence[str]
