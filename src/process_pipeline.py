@@ -4,6 +4,8 @@ from src.downloader import download_audio
 from src.encoder import wav_to_flac_with_thumbnail
 from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
+import torchaudio as ta
+from flowhigh import FlowHighSR
 
 
 def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
@@ -22,6 +24,12 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         result: DownloadResult = download_audio(url, output_dir)
         print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
+        # Fase do meio
+        model = FlowHighSR.from_pretrained(device="cuda")
+        wav, sr_in = ta.load(result.audio_path)
+        wav_hr = model.generate(wav, sr_in, result.audio_path)
+        ta.save(result.audio_path, wav_hr.cpu(), result.audio_path)
+
         # 4. FLAC + Thumbnail
         flac_path = Path(output_dir) / f"{result.title}.flac"
         wav_to_flac_with_thumbnail(
@@ -33,6 +41,12 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         print(f"  💾 FLAC salvo: {flac_path.name}")
 
         # Limpeza de arquivos temporários
-        cleanup_temp_files([Path(result.audio_path), Path(result.audio_path)])
+        cleanup_temp_files(
+            [
+                Path(result.audio_path),
+                Path(result.audio_path),
+                Path(result.audio_path.replace("wav", "webp")),
+            ]
+        )
         # except Exception as e:
         #     print(f"❌ Erro ao processar {url}: {e}")
