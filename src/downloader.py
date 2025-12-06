@@ -27,10 +27,10 @@ def download_audio(url: str, output_dir: str) -> DownloadResult:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "audio")
-        thumbnail_url = info.get("thumbnail", "")
-        audio_path = Path(f"{output_dir}/{title}.wav")
+        thumbnail_url = info.get("thumbnail", "")  # type: ignore
+        audio_path = Path(ydl.prepare_filename(info).replace("\\", "/").replace("webm", "wav"))  # type: ignore
     return DownloadResult(
         audio_path=str(audio_path),
         title=title,  # type: ignore
-        thumbnail_url=thumbnail_url,  # type: ignore
+        thumbnail_url=thumbnail_url.replace("\\", "/"),  # type: ignore
     )

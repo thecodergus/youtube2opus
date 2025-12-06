@@ -216,3 +216,4 @@ uv.lock
 # Fromato de audio
 *.wav
 *.webp
+*.xml
