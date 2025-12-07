@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "audioop-lts>=0.2.2",
-    "cupy-cuda13x>=13.6.0",
     "fat-llama>=1.1.0",
     "matplotlib>=3.10.7",
     "mutagen>=1.47.0",
