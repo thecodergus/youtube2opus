@@ -3,6 +3,7 @@ from typing import Final
 from pathlib import Path
 import yt_dlp
 from src.types import DownloadResult
+from pathvalidate import sanitize_filename
 
 
 def download_audio(url: str, output_dir: str) -> DownloadResult:
@@ -26,7 +27,7 @@ def download_audio(url: str, output_dir: str) -> DownloadResult:
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
         info = ydl.extract_info(url, download=True)
-        title = info.get("title", "audio").replace('"', "")  # type: ignore
+        title = sanitize_filename(info.get("title", "audio").replace('"', ""), platform="windows")  # type: ignore
         thumbnail_url = info.get("thumbnail", "")  # type: ignore
         audio_path = Path(ydl.prepare_filename(info).replace("\\", "/").replace("webm", "wav"))  # type: ignore
     return DownloadResult(
