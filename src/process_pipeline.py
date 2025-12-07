@@ -37,7 +37,7 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
             [
                 Path(result.audio_path),
                 Path(result.audio_path),
-                Path(result.audio_path.replace("wav", "webp")),
+                Path(result.audio_path.replace(".wav", ".webp")),
             ]
         )
         # except Exception as e:
