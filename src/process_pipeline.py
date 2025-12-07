@@ -23,7 +23,7 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
         print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
         # FLAC + Thumbnail
-        flac_path = Path(output_dir) / f"{result.title}.flac"
+        flac_path = Path(output_dir + "/" + f"{result.title.replace('"', "")}.flac")
         wav_to_flac_with_thumbnail(
             wav_path=str(result.audio_path),
             flac_path=str(flac_path),
