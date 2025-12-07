@@ -17,7 +17,7 @@ def cleanup_temp_files(paths: list[Path]) -> None:
             pass
 
 
-def clean_youtube_url(url: str, keep_timestamp: bool = True) -> str | None:
+def clean_youtube_url(url: str, keep_timestamp: bool = True) -> str:
     """
     Recebe um link do YouTube, verifica se é válido e retorna o link limpo (apenas do vídeo).
     Remove parâmetros de playlist, tracking, embed, etc.
@@ -55,7 +55,7 @@ def clean_youtube_url(url: str, keep_timestamp: bool = True) -> str | None:
                 video_id = qs["v"][0]
 
     if not (video_id and len(video_id) == 11):
-        return None  # Não é um link válido de vídeo
+        raise Exception("Se fodeu")
 
     # Parse parâmetros para preservar timestamp se desejado
     parsed = urlparse(url)
