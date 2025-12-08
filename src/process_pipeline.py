@@ -6,6 +6,7 @@ from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
 from fat_llama.audio_fattener.feed import upscale
 from multiprocessing import Pool
+from functools import partial
 
 
 def process_link(link: str, output_dir: str) -> None:
@@ -59,5 +60,7 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     4. Salva em FLAC com thumbnail
     """
     ensure_directory_exists(output_dir)
+    process_partial = partial(process_link, output_dir=output_dir)
+
     with Pool(processes=8) as pool:
-        pool.map(lambda x: process_link(x, output_dir=output_dir), links)
+        pool.map(process_partial, links)
