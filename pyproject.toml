@@ -15,7 +15,7 @@ dependencies = [
     "soundfile>=0.13.1",
     "sox>=1.5.0",
     "yt-dlp>=2025.11.12",
-    "fat-llama",
+    "fat-llama-cuda13x",
     "tqdm>=4.67.1",
     "pipwin>=0.5.2",
 ]
@@ -24,4 +24,4 @@ dependencies = [
 dev = ["black>=25.11.0"]
 
 [tool.uv.sources]
-fat-llama = { git = "https://github.com/thecodergus/fat_llama_cuda13x.git" }
+fat-llama-cuda13x = { git = "https://github.com/thecodergus/fat_llama_cuda13x.git" }

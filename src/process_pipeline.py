@@ -21,7 +21,7 @@ def process_link(link: str, output_dir: str) -> None:
     result: DownloadResult = download_audio(link, output_dir)
     print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
-    flac_path = Path(output_dir + "/" + f"{result.title}.flac")
+    flac_path = output_dir + "/" + f"{result.title}.flac"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
         output_file_path=flac_path,
@@ -53,13 +53,12 @@ def process_link(link: str, output_dir: str) -> None:
     flac_audio.save()
 
     # Limpeza de arquivos temporários
-    # cleanup_temp_files(
-    #     [
-    #         Path(result.audio_path),
-    #         # Path(result.audio_path),
-    #         Path(result.audio_path.replace(".wav", ".webp")),
-    #     ]
-    # )
+    cleanup_temp_files(
+        [
+            Path(result.audio_path),
+            Path(result.audio_path.replace(".mp3", ".webp")),
+        ]
+    )
     # except Exception as e:
     #     print(f"❌ Erro ao processar {url}: {e}")
 
@@ -75,5 +74,5 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     ensure_directory_exists(output_dir)
     process_partial = partial(process_link, output_dir=output_dir)
 
-    with Pool(processes=8) as pool:
+    with Pool(processes=3) as pool:
         pool.map(process_partial, links)
