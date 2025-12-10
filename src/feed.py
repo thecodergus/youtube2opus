@@ -302,23 +302,7 @@ class UpscaleConfig:
     toggle_adaptive_filter: bool = True
 
 
-# --- Função Principal Modularizada ---
-def upscale(cfg: UpscaleConfig) -> None:
-    """
-    Pipeline principal de upscaling funcional de áudio, modular e seguro.
-    """
-    validate_config(cfg)
-    logger.info(f"Lendo arquivo {cfg.input_file_path} ({cfg.source_format})...")
-    samples, audio_data, upscale_factor = prepare_audio(cfg)
-    logger.info(f"Fator de upscaling: {upscale_factor}")
-    channels = samples[:, cp.newaxis] if samples.ndim == 1 else samples
-    logger.info("Processando e upscaling dos canais...")
-    with gpu_memory_scope(samples, channels):
-        upscaled = process_channels(channels, cfg, upscale_factor)
-        write_output(cfg, audio_data, upscaled, upscale_factor)
-    logger.info("Arquivo salvo e memória GPU liberada.")
-
-
+# --- Funções Utilitárias ---
 def validate_config(cfg: UpscaleConfig) -> None:
     """
     Valida os parâmetros do pipeline.
@@ -349,3 +333,68 @@ def prepare_audio(cfg: UpscaleConfig) -> Tuple[CpArray, AudioData, int]:
         round(target_bitrate / audio_data.bitrate) if audio_data.bitrate else 4
     )
     return samples, audio_data, upscale_factor
+
+
+def process_channels(
+    channels: CpArray, cfg: UpscaleConfig, upscale_factor: int
+) -> CpArray:
+    """
+    Pipeline funcional: upscaling, autoscale, normalização, filtro adaptativo.
+    """
+    upscaled = upscale_channels(
+        channels,
+        upscale_factor=upscale_factor,
+        max_iter=cfg.max_iterations,
+        threshold=cfg.threshold_value,
+    )
+    if cfg.toggle_autoscale:
+        upscaled = cp.column_stack(
+            [
+                normalize_signal(upscaled[:, i]) * cp.max(cp.abs(channels[:, i]))
+                for i in range(channels.shape[1])
+            ]
+        )
+    if cfg.toggle_normalize:
+        upscaled = cp.column_stack(
+            [normalize_signal(upscaled[:, i]) for i in range(upscaled.shape[1])]
+        )
+    if cfg.toggle_adaptive_filter:
+        stak = [
+            lms_filter(upscaled[:, i], upscaled[:, i]) for i in range(upscaled.shape[1])
+        ]
+        upscaled = cp.column_stack(stak)
+    return upscaled
+
+
+def write_output(
+    cfg: UpscaleConfig, audio_data: AudioData, upscaled: CpArray, upscale_factor: int
+) -> None:
+    """
+    Converte para NumPy e escreve o áudio processado no disco.
+    """
+    new_sample_rate = audio_data.sample_rate * upscale_factor
+    final_audio = cp.asnumpy(upscaled)
+    write_audio(
+        cfg.output_file_path,
+        new_sample_rate,
+        final_audio,
+        cfg.target_format,
+    )
+    del final_audio  # Libera RAM se necessário
+
+
+# --- Função Principal Modularizada ---
+def upscale(cfg: UpscaleConfig) -> None:
+    """
+    Pipeline principal de upscaling funcional de áudio, modular e seguro.
+    """
+    validate_config(cfg)
+    logger.info(f"Lendo arquivo {cfg.input_file_path} ({cfg.source_format})...")
+    samples, audio_data, upscale_factor = prepare_audio(cfg)
+    logger.info(f"Fator de upscaling: {upscale_factor}")
+    channels = samples[:, cp.newaxis] if samples.ndim == 1 else samples
+    logger.info("Processando e upscaling dos canais...")
+    with gpu_memory_scope(samples, channels):
+        upscaled = process_channels(channels, cfg, upscale_factor)
+        write_output(cfg, audio_data, upscaled, upscale_factor)
+    logger.info("Arquivo salvo e memória GPU liberada.")
