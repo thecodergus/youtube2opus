@@ -80,5 +80,5 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     ensure_directory_exists(output_dir)
     process_partial = partial(process_link, output_dir=output_dir)
 
-    with Pool(processes=mp.cpu_count()) as pool:
+    with Pool(processes=3) as pool:
         pool.map(process_partial, links)
