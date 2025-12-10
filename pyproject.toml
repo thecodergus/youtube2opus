@@ -3,9 +3,8 @@ name = "youtube2opus"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "audioop-lts>=0.2.2",
     "matplotlib>=3.10.7",
     "mutagen>=1.47.0",
     "pathvalidate>=3.3.1",
@@ -16,25 +15,13 @@ dependencies = [
     "soundfile>=0.13.1",
     "sox>=1.5.0",
     "yt-dlp>=2025.11.12",
-    "torch>=2.9.1",
-    "torchvision>=0.24.1",
-    "nvidia-cudnn-frontend>=1.16.0",
     "fat-llama",
+    "tqdm>=4.67.1",
+    "pipwin>=0.5.2",
 ]
 
 [dependency-groups]
 dev = ["black>=25.11.0"]
 
-[[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
-explicit = true
 
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-]
-torchvision = [
-    { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-]
 fat-llama = { git = "https://github.com/thecodergus/fat_llama_cuda13x.git" }

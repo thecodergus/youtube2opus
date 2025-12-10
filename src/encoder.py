@@ -57,19 +57,5 @@ def wav_to_flac_with_thumbnail(
     audio.export(flac_path, format="flac")
 
     # 2. Download thumbnail
-    response: Final[requests.Response] = requests.get(thumbnail_url, timeout=10)
-    response.raise_for_status()
-    image_data: Final[bytes] = response.content
-    mime_type: str = mimetypes.guess_type(thumbnail_url)[0] or "image/jpeg"
 
     # 3. Metadados FLAC
-    flac_audio: Final[FLAC] = FLAC(flac_path)
-    flac_audio["title"] = title
-    flac_audio.clear_pictures()
-    picture: Final[Picture] = Picture()
-    picture.data = image_data
-    picture.type = 3  # Cover (front)
-    picture.mime = mime_type
-    picture.desc = "Cover"
-    flac_audio.add_picture(picture)
-    flac_audio.save()

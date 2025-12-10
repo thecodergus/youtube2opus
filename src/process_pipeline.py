@@ -1,12 +1,17 @@
 from typing import Sequence
 from pathlib import Path
 from src.downloader import download_audio
-from src.encoder import wav_to_flac_with_thumbnail
 from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
-from fat_llama.audio_fattener.feed import upscale
+
+from fat_llama.feed import upscale, UpscaleConfig
 from multiprocessing import Pool
 from functools import partial
+from typing import Final
+import requests
+from mutagen.flac import FLAC, Picture
+import requests
+import mimetypes
 
 
 def process_link(link: str, output_dir: str) -> None:
@@ -15,9 +20,10 @@ def process_link(link: str, output_dir: str) -> None:
     # Download
     result: DownloadResult = download_audio(link, output_dir)
     print(f"  ⬇️  Baixado: {result.audio_path.title}")
+
     flac_path = Path(output_dir + "/" + f"{result.title}.flac")
-    upscale(
-        input_file_path=str(result.audio_path),
+    config = UpscaleConfig(
+        input_file_path=result.audio_path,
         output_file_path=flac_path,
         source_format="mp3",
         target_format="flac",
@@ -28,25 +34,32 @@ def process_link(link: str, output_dir: str) -> None:
         toggle_autoscale=True,
         toggle_adaptive_filter=True,
     )
+    upscale(config)
 
-    # # FLAC + Thumbnail
-    # flac_path = Path(output_dir + "/" + f"{result.title}.flac")
-    # wav_to_flac_with_thumbnail(
-    #     wav_path=str(result.audio_path),
-    #     flac_path=str(flac_path),
-    #     thumbnail_url=result.thumbnail_url,
-    #     title=result.title,
-    # )
-    # print(f"  💾 FLAC salvo: {flac_path.name}")
+    # ADicionando Thumbmail
+    response: Final[requests.Response] = requests.get(result.thumbnail_url, timeout=10)
+    response.raise_for_status()
+    image_data: Final[bytes] = response.content
+    mime_type: str = mimetypes.guess_type(result.thumbnail_url)[0] or "image/jpeg"
+    flac_audio: Final[FLAC] = FLAC(flac_path)
+    flac_audio["title"] = result.title
+    flac_audio.clear_pictures()
+    picture: Final[Picture] = Picture()
+    picture.data = image_data
+    picture.type = 3
+    picture.mime = mime_type
+    picture.desc = "Cover"
+    flac_audio.add_picture(picture)
+    flac_audio.save()
 
     # Limpeza de arquivos temporários
-    cleanup_temp_files(
-        [
-            Path(result.audio_path),
-            Path(result.audio_path),
-            Path(result.audio_path.replace(".wav", ".webp")),
-        ]
-    )
+    # cleanup_temp_files(
+    #     [
+    #         Path(result.audio_path),
+    #         # Path(result.audio_path),
+    #         Path(result.audio_path.replace(".wav", ".webp")),
+    #     ]
+    # )
     # except Exception as e:
     #     print(f"❌ Erro ao processar {url}: {e}")
 

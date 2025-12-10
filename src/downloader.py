@@ -3,6 +3,7 @@ from typing import Final
 from pathlib import Path
 import yt_dlp
 from src.types import DownloadResult
+
 from pathvalidate import sanitize_filename
 
 
@@ -16,6 +17,7 @@ def download_audio(url: str, output_dir: str) -> DownloadResult:
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
+                # "preferredcodec": "wav",
                 "preferredcodec": "mp3",
                 "preferredquality": "0",
             }
