@@ -23,5 +23,5 @@ dependencies = [
 [dependency-groups]
 dev = ["black>=25.11.0"]
 
-
+[tool.uv.sources]
 fat-llama = { git = "https://github.com/thecodergus/fat_llama_cuda13x.git" }
