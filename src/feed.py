@@ -302,13 +302,26 @@ class UpscaleConfig:
     toggle_adaptive_filter: bool = True
 
 
+# --- Função Principal Modularizada ---
 def upscale(cfg: UpscaleConfig) -> None:
     """
-    Pipeline principal de upscaling funcional de áudio.
-    Args:
-        cfg: Configuração imutável (UpscaleConfig).
-    Raises:
-        ValueError: Parâmetros inválidos.
+    Pipeline principal de upscaling funcional de áudio, modular e seguro.
+    """
+    validate_config(cfg)
+    logger.info(f"Lendo arquivo {cfg.input_file_path} ({cfg.source_format})...")
+    samples, audio_data, upscale_factor = prepare_audio(cfg)
+    logger.info(f"Fator de upscaling: {upscale_factor}")
+    channels = samples[:, cp.newaxis] if samples.ndim == 1 else samples
+    logger.info("Processando e upscaling dos canais...")
+    with gpu_memory_scope(samples, channels):
+        upscaled = process_channels(channels, cfg, upscale_factor)
+        write_output(cfg, audio_data, upscaled, upscale_factor)
+    logger.info("Arquivo salvo e memória GPU liberada.")
+
+
+def validate_config(cfg: UpscaleConfig) -> None:
+    """
+    Valida os parâmetros do pipeline.
     """
     valid_bitrate_ranges = {
         "flac": (800, 1411),
@@ -322,94 +335,17 @@ def upscale(cfg: UpscaleConfig) -> None:
             f"Bitrate {cfg.target_bitrate_kbps} fora do intervalo para {cfg.target_format}."
         )
 
-    logger.info(f"Lendo arquivo {cfg.input_file_path} ({cfg.source_format})...")
-    audio_data = read_audio(cfg.input_file_path, cfg.source_format)
-    if audio_data.bitrate:
-        logger.info(f"Bitrate original: {audio_data.bitrate / 1000:.2f} kbps")
 
+def prepare_audio(cfg: UpscaleConfig) -> Tuple[CpArray, AudioData, int]:
+    """
+    Lê o áudio e calcula o fator de upscaling.
+    """
+    audio_data = read_audio(cfg.input_file_path, cfg.source_format)
     samples = cp.array(audio_data.samples, dtype=cp.float32)
     if audio_data.audio_segment.channels == 2:
         samples = samples.reshape((-1, 2))
-
     target_bitrate = cfg.target_bitrate_kbps * 1000
     upscale_factor = (
         round(target_bitrate / audio_data.bitrate) if audio_data.bitrate else 4
     )
-    logger.info(f"Fator de upscaling: {upscale_factor}")
-
-    # Mono ou estéreo
-    if samples.ndim == 1:
-        logger.info("Canal mono detectado.")
-        channels = samples[:, cp.newaxis]
-    else:
-        logger.info("Canais estéreo detectados.")
-        channels = samples
-
-    logger.info("Processando e upscaling dos canais...")
-    with gpu_memory_scope(samples):
-        if samples.ndim == 1:
-            channels = samples[:, cp.newaxis]
-        else:
-            channels = samples
-
-        upscaled_channels = upscale_channels(
-            channels,
-            upscale_factor=upscale_factor,
-            max_iter=cfg.max_iterations,
-            threshold=cfg.threshold_value,
-        )
-        del channels  # Libera imediatamente
-
-        if cfg.toggle_autoscale:
-            scaled_upscaled_channels = cp.column_stack(
-                [
-                    normalize_signal(upscaled_channels[:, i])
-                    * cp.max(cp.abs(upscaled_channels[:, i]))
-                    for i in range(upscaled_channels.shape[1])
-                ]
-            )
-        else:
-            scaled_upscaled_channels = upscaled_channels
-        del upscaled_channels
-
-        if cfg.toggle_normalize:
-            normalized_upscaled_channels = cp.column_stack(
-                [
-                    normalize_signal(scaled_upscaled_channels[:, i])
-                    for i in range(scaled_upscaled_channels.shape[1])
-                ]
-            )
-        else:
-            normalized_upscaled_channels = scaled_upscaled_channels
-        del scaled_upscaled_channels
-
-        if cfg.toggle_adaptive_filter:
-            stak = []
-            num: int = normalized_upscaled_channels.shape[1]
-            for i in range(num):
-                lms = lms_filter(
-                    normalized_upscaled_channels[:, i],
-                    normalized_upscaled_channels[:, i],
-                )
-                stak.append(lms)
-            filtered_upscaled_channels = cp.column_stack(stak)
-            del stak
-        else:
-            filtered_upscaled_channels = normalized_upscaled_channels
-        del normalized_upscaled_channels
-
-        # Conversão para NumPy (CPU) e liberação explícita
-        final_audio: NpArray = cp.asnumpy(filtered_upscaled_channels)
-        del filtered_upscaled_channels
-        cp.cuda.Stream.null.synchronize()
-        cp.get_default_memory_pool().free_all_blocks()
-
-    # Escrita no disco (CPU)
-    write_audio(
-        cfg.output_file_path,
-        audio_data.sample_rate * upscale_factor,
-        final_audio,
-        cfg.target_format,
-    )
-    del final_audio  # Libera RAM se necessário
-    logging.info("Arquivo salvo e memória GPU liberada.")
+    return samples, audio_data, upscale_factor
