@@ -273,12 +273,15 @@ def upscale_channels(
     """
     Aplica pipeline funcional a todos os canais.
     """
-    cp.zeros(1)
-    resultado = [
-        process_channel(ch, upscale_factor, max_iter, threshold) for ch in channels.T
-    ]
-
-    return cp.column_stack(resultado)
+    results = []
+    for ch in channels.T:
+        out = process_channel(ch, upscale_factor, max_iter, threshold)
+        results.append(out)
+        del ch, out
+        cp.cuda.Stream.null.synchronize()
+        cp.get_default_memory_pool().free_all_blocks()
+        cp.fft.config.get_plan_cache().clear()
+    return cp.column_stack(results)
 
 
 # --- Pipeline Principal ---

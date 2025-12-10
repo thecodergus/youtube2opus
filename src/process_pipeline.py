@@ -12,9 +12,13 @@ import requests
 from mutagen.flac import FLAC, Picture
 import requests
 import mimetypes
+import multiprocessing as mp
 
 
 def process_link(link: str, output_dir: str) -> None:
+    import cupy as cp
+
+    cp.fft.config.set_plan_cache_size(4)
     print(f"\n🎬 Processando: {link}")
     # try:
     # Download
@@ -35,6 +39,9 @@ def process_link(link: str, output_dir: str) -> None:
         toggle_adaptive_filter=True,
     )
     upscale(config)
+    cp.fft.config.get_plan_cache().clear()
+    cp.get_default_memory_pool().free_all_blocks()
+    cp.cuda.Stream.null.synchronize()
 
     # ADicionando Thumbmail
     response: Final[requests.Response] = requests.get(result.thumbnail_url, timeout=10)
@@ -59,8 +66,6 @@ def process_link(link: str, output_dir: str) -> None:
             Path(result.audio_path.replace(".mp3", ".webp")),
         ]
     )
-    # except Exception as e:
-    #     print(f"❌ Erro ao processar {url}: {e}")
 
 
 def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
@@ -71,8 +76,9 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     3. Aplica super-resolução
     4. Salva em FLAC com thumbnail
     """
+    mp.set_start_method("spawn", force=True)
     ensure_directory_exists(output_dir)
     process_partial = partial(process_link, output_dir=output_dir)
 
-    with Pool(processes=3) as pool:
+    with Pool(processes=mp.cpu_count()) as pool:
         pool.map(process_partial, links)
