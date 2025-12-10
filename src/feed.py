@@ -1,0 +1,415 @@
+from typing import Optional, Union, TypeAlias, Tuple, Callable, Sequence, Any, cast
+from dataclasses import dataclass, field
+import numpy as np
+import cupy as cp
+from pydub import AudioSegment
+import soundfile as sf
+import os
+import logging
+from mutagen.mp3 import MP3
+from mutagen.flac import FLAC
+from mutagen.oggvorbis import OggVorbis
+from mutagen.wave import WAVE
+from enum import Enum, auto
+from functools import partial
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from threading import Lock
+from contextlib import contextmanager
+import cupy as cp
+import gc
+
+
+class AudioTypes(Enum):
+    MP3 = auto()
+    WAV = auto()
+    FLAC = auto()
+    OGG = auto()
+
+
+@contextmanager
+def gpu_memory_scope(*arrays: cp.ndarray):
+    """
+    Context manager para liberar arrays CuPy e limpar o memory pool ao sair do contexto.
+    """
+    try:
+        yield
+    finally:
+        for arr in arrays:
+            try:
+                del arr
+            except Exception:
+                pass
+        cp.cuda.Stream.null.synchronize()
+        gc.collect()
+        cp.get_default_memory_pool().free_all_blocks()
+        logging.info("Memória GPU liberada pelo context manager.")
+
+
+def log_gpu_memory(stage: str) -> None:
+    used = cp.get_default_memory_pool().used_bytes() / 1e6
+    logging.info(f"[{stage}] Memória GPU usada: {used:.2f} MB")
+
+
+# --- Logging Config ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("audio_upscale")
+
+# --- Type Aliases ---
+NpArray: TypeAlias = np.ndarray
+CpArray: TypeAlias = cp.ndarray
+
+
+# --- Data Classes ---
+@dataclass(frozen=True)
+class AudioData:
+    sample_rate: int
+    samples: NpArray
+    bitrate: Optional[int]
+    audio_segment: AudioSegment
+
+
+# --- I/O Handlers ---
+def read_audio(file_path: str, fmt: str) -> AudioData:
+    """
+    Lê um arquivo de áudio e retorna metadados e amostras.
+    Args:
+        file_path: Caminho do arquivo.
+        fmt: Formato do arquivo ('mp3', 'flac', 'ogg', 'wav').
+    Returns:
+        AudioData: Estrutura imutável com dados do áudio.
+    Raises:
+        FileNotFoundError: Se o arquivo não existir.
+        ValueError: Se o formato não for suportado.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Arquivo não encontrado: {file_path}")
+
+    extra_params = ["-drc_scale", "0"]
+    audio = AudioSegment.from_file(file_path, format=fmt, parameters=extra_params)
+    samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+    sample_rate = audio.frame_rate
+
+    # Pattern matching para bitrate
+    match fmt:
+        case "mp3":
+            bitrate = MP3(file_path).info.bitrate
+        case "flac":
+            bitrate = FLAC(file_path).info.bitrate
+        case "ogg":
+            bitrate = OggVorbis(file_path).info.bitrate
+        case "wav":
+            bitrate = WAVE(file_path).info.bitrate
+        case _:
+            duration = len(audio) / 1000.0
+            bitrate = int((len(samples) * 8) / duration) if duration > 0 else None
+
+    # Ajuste para estéreo
+    if audio.channels == 2:
+        samples = samples.reshape((-1, 2))
+
+    return AudioData(
+        sample_rate=sample_rate, samples=samples, bitrate=bitrate, audio_segment=audio
+    )
+
+
+def write_audio(file_path: str, sample_rate: int, data: NpArray, fmt: str) -> None:
+    """
+    Escreve dados de áudio em arquivo.
+    Args:
+        file_path: Caminho de saída.
+        sample_rate: Taxa de amostragem.
+        data: Amostras (NumPy).
+        fmt: Formato de saída ('flac', 'wav').
+    Raises:
+        ValueError: Se o formato não for suportado.
+    """
+    match fmt:
+        case "flac":
+            sf.write(
+                file_path,
+                data.astype(np.float32),
+                sample_rate,
+                format="FLAC",
+                subtype="PCM_24",
+                compression_level=8,
+            )
+        case "wav":
+            sf.write(
+                file_path,
+                data.astype(np.float32),
+                sample_rate,
+                format="WAV",
+                subtype="PCM_24",
+                compression_level=8,
+            )
+        case _:
+            raise ValueError(f"Formato de saída não suportado: {fmt}")
+
+
+# --- Processamento Funcional ---
+
+
+def new_interpolation_algorithm(data: CpArray, upscale_factor: int) -> CpArray:
+    """
+    Interpola dados duplicando pontos via vetorização.
+    Args:
+        data: Sinal de entrada (CuPy).
+        upscale_factor: Fator de upscaling.
+    Returns:
+        CpArray: Sinal expandido.
+    """
+    return cp.repeat(data, upscale_factor)
+
+
+def initialize_ist(data: CpArray, threshold: float) -> CpArray:
+    """
+    Inicializa IST aplicando limiar.
+    """
+    return cp.where(cp.abs(data) > threshold, data, 0)
+
+
+def iterative_soft_thresholding(
+    data: CpArray, max_iter: int, threshold: float
+) -> CpArray:
+    """
+    Aplica IST via FFT, com reconstrução harmônica.
+    """
+    data_thres = initialize_ist(data, threshold)
+    for i in range(max_iter):
+        # logger.info(f"iterative_soft_thresholding ({i})")
+        data_fft = cp.fft.fft(data_thres)
+        data_fft_thres = cp.where(cp.abs(data_fft) > threshold, data_fft, 0)
+        data_thres = cp.fft.ifft(data_fft_thres).real
+        harmonics = cp.sin(cp.linspace(0, 2 * cp.pi, len(data_thres)))
+        data_thres += 0.1 * harmonics
+    return data_thres
+
+
+def lms_filter(
+    signal: CpArray,
+    desired: CpArray,
+    mu: float = 0.001,
+    num_taps: int = 32,
+    block_size: int = 2048,
+) -> CpArray:
+    """
+    Filtro LMS adaptativo vetorizado por blocos (Block LMS) usando CuPy.
+    - Elimina locks, threads Python e overhead de sincronização.
+    - Mantém a adaptação dos pesos entre blocos.
+    - Totalmente funcional e imutável.
+    """
+    n: int = len(signal)
+    w: CpArray = cp.zeros(num_taps, dtype=cp.float32)
+    filtered_signal: CpArray = cp.zeros(n, dtype=cp.float32)
+    num_blocks: int = (n - num_taps) // block_size
+
+    for b in range(num_blocks):
+        start: int = num_taps + b * block_size
+        end: int = start + block_size
+        # Monta matriz de blocos: cada linha é uma janela de num_taps
+        X: CpArray = cp.stack(
+            [signal[start - i : end - i] for i in range(num_taps)], axis=1
+        )
+        y: CpArray = X @ w
+        e: CpArray = desired[start:end] - y
+        # Atualiza pesos apenas uma vez por bloco
+        w = w + 2 * mu / block_size * X.T @ e
+        filtered_signal[start:end] = y
+    return filtered_signal
+
+
+def chunked_block_lms_filter(
+    signal: CpArray,
+    desired: CpArray,
+    mu: float = 0.001,
+    num_taps: int = 32,
+    block_size: int = 2048,
+    chunk_size: int = 10**6,
+) -> CpArray:
+    """
+    Block LMS com chunking para sinais muito grandes.
+    """
+    n: int = len(signal)
+    filtered_signal: CpArray = cp.zeros(n, dtype=cp.float32)
+    w: CpArray = cp.zeros(num_taps, dtype=cp.float32)
+    for chunk_start in range(0, n, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, n)
+        filtered_signal[chunk_start:chunk_end] = lms_filter(
+            signal[chunk_start:chunk_end],
+            desired[chunk_start:chunk_end],
+            mu=mu,
+            num_taps=num_taps,
+            block_size=block_size,
+        )
+        # Opcional: propague w se necessário (ajuste block_lms_filter para retornar w)
+    return filtered_signal
+
+
+def normalize_signal(signal: CpArray) -> CpArray:
+    """
+    Normaliza sinal para [-1, 1].
+    Raises:
+        ValueError: Se o sinal for vazio.
+    """
+    if signal.size == 0:
+        raise ValueError("Sinal vazio não pode ser normalizado.")
+    return signal / cp.max(cp.abs(signal))
+
+
+def process_channel(
+    channel: CpArray, upscale_factor: int, max_iter: int, threshold: float
+) -> CpArray:
+    """
+    Pipeline funcional para um canal.
+    """
+    expanded = new_interpolation_algorithm(channel, upscale_factor)
+    ist = iterative_soft_thresholding(expanded, max_iter, threshold)
+    return expanded + ist
+
+
+def upscale_channels(
+    channels: CpArray, upscale_factor: int, max_iter: int, threshold: float
+) -> CpArray:
+    """
+    Aplica pipeline funcional a todos os canais.
+    """
+    cp.zeros(1)
+    resultado = [
+        process_channel(ch, upscale_factor, max_iter, threshold) for ch in channels.T
+    ]
+
+    return cp.column_stack(resultado)
+
+
+# --- Pipeline Principal ---
+
+
+@dataclass(frozen=True)
+class UpscaleConfig:
+    """
+    Configuração imutável para o pipeline de upscaling de áudio.
+    """
+
+    input_file_path: str
+    output_file_path: str
+    source_format: str
+    target_format: str = "flac"
+    max_iterations: int = 300
+    threshold_value: float = 0.6
+    target_bitrate_kbps: int = 1411
+    toggle_normalize: bool = True
+    toggle_autoscale: bool = True
+    toggle_adaptive_filter: bool = True
+
+
+def upscale(cfg: UpscaleConfig) -> None:
+    """
+    Pipeline principal de upscaling funcional de áudio.
+    Args:
+        cfg: Configuração imutável (UpscaleConfig).
+    Raises:
+        ValueError: Parâmetros inválidos.
+    """
+    valid_bitrate_ranges = {
+        "flac": (800, 1411),
+        "wav": (800, 6444),
+    }
+    if cfg.target_format not in valid_bitrate_ranges:
+        raise ValueError(f"Formato de saída não suportado: {cfg.target_format}")
+    min_bitrate, max_bitrate = valid_bitrate_ranges[cfg.target_format]
+    if not (min_bitrate <= cfg.target_bitrate_kbps <= max_bitrate):
+        raise ValueError(
+            f"Bitrate {cfg.target_bitrate_kbps} fora do intervalo para {cfg.target_format}."
+        )
+
+    logger.info(f"Lendo arquivo {cfg.input_file_path} ({cfg.source_format})...")
+    audio_data = read_audio(cfg.input_file_path, cfg.source_format)
+    if audio_data.bitrate:
+        logger.info(f"Bitrate original: {audio_data.bitrate / 1000:.2f} kbps")
+
+    samples = cp.array(audio_data.samples, dtype=cp.float32)
+    if audio_data.audio_segment.channels == 2:
+        samples = samples.reshape((-1, 2))
+
+    target_bitrate = cfg.target_bitrate_kbps * 1000
+    upscale_factor = (
+        round(target_bitrate / audio_data.bitrate) if audio_data.bitrate else 4
+    )
+    logger.info(f"Fator de upscaling: {upscale_factor}")
+
+    # Mono ou estéreo
+    if samples.ndim == 1:
+        logger.info("Canal mono detectado.")
+        channels = samples[:, cp.newaxis]
+    else:
+        logger.info("Canais estéreo detectados.")
+        channels = samples
+
+    logger.info("Processando e upscaling dos canais...")
+    with gpu_memory_scope(samples):
+        if samples.ndim == 1:
+            channels = samples[:, cp.newaxis]
+        else:
+            channels = samples
+
+        upscaled_channels = upscale_channels(
+            channels,
+            upscale_factor=upscale_factor,
+            max_iter=cfg.max_iterations,
+            threshold=cfg.threshold_value,
+        )
+        del channels  # Libera imediatamente
+
+        if cfg.toggle_autoscale:
+            scaled_upscaled_channels = cp.column_stack(
+                [
+                    normalize_signal(upscaled_channels[:, i])
+                    * cp.max(cp.abs(upscaled_channels[:, i]))
+                    for i in range(upscaled_channels.shape[1])
+                ]
+            )
+        else:
+            scaled_upscaled_channels = upscaled_channels
+        del upscaled_channels
+
+        if cfg.toggle_normalize:
+            normalized_upscaled_channels = cp.column_stack(
+                [
+                    normalize_signal(scaled_upscaled_channels[:, i])
+                    for i in range(scaled_upscaled_channels.shape[1])
+                ]
+            )
+        else:
+            normalized_upscaled_channels = scaled_upscaled_channels
+        del scaled_upscaled_channels
+
+        if cfg.toggle_adaptive_filter:
+            stak = []
+            num: int = normalized_upscaled_channels.shape[1]
+            for i in range(num):
+                lms = lms_filter(
+                    normalized_upscaled_channels[:, i],
+                    normalized_upscaled_channels[:, i],
+                )
+                stak.append(lms)
+            filtered_upscaled_channels = cp.column_stack(stak)
+            del stak
+        else:
+            filtered_upscaled_channels = normalized_upscaled_channels
+        del normalized_upscaled_channels
+
+        # Conversão para NumPy (CPU) e liberação explícita
+        final_audio: NpArray = cp.asnumpy(filtered_upscaled_channels)
+        del filtered_upscaled_channels
+        cp.cuda.Stream.null.synchronize()
+        cp.get_default_memory_pool().free_all_blocks()
+
+    # Escrita no disco (CPU)
+    write_audio(
+        cfg.output_file_path,
+        audio_data.sample_rate * upscale_factor,
+        final_audio,
+        cfg.target_format,
+    )
+    del final_audio  # Libera RAM se necessário
+    logging.info("Arquivo salvo e memória GPU liberada.")

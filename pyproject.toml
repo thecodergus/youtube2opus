@@ -15,13 +15,12 @@ dependencies = [
     "soundfile>=0.13.1",
     "sox>=1.5.0",
     "yt-dlp>=2025.11.12",
-    "fat-llama-cuda13x",
     "tqdm>=4.67.1",
     "pipwin>=0.5.2",
+    "numpy>=2.3.5",
+    "cupy-cuda13x>=13.6.0",
+    "scipy>=1.16.3",
 ]
 
 [dependency-groups]
 dev = ["black>=25.11.0"]
-
-[tool.uv.sources]
-fat-llama-cuda13x = { git = "https://github.com/thecodergus/fat_llama_cuda13x.git" }

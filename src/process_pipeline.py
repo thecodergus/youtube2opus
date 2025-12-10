@@ -4,7 +4,7 @@ from src.downloader import download_audio
 from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
 
-from fat_llama.feed import upscale, UpscaleConfig
+from .feed import upscale, UpscaleConfig
 from multiprocessing import Pool
 from functools import partial
 from typing import Final
