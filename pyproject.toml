@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=2.3.5",
     "cupy-cuda13x>=13.6.0",
     "scipy>=1.16.3",
+    "pyflac>=3.0.0",
 ]
 
 [dependency-groups]

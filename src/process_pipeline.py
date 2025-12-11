@@ -13,18 +13,20 @@ from mutagen.flac import FLAC, Picture
 import requests
 import mimetypes
 import multiprocessing as mp
+import cupy as cp
+from pyflac import FileEncoder
 
 
 def process_link(link: str, output_dir: str) -> None:
-    import cupy as cp
 
     cp.fft.config.set_plan_cache_size(4)
     print(f"\n🎬 Processando: {link}")
-    # try:
-    # Download
+
+    # Baixando mp3
     result: DownloadResult = download_audio(link, output_dir)
     print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
+    # Melhorando musica
     flac_path = output_dir + "/" + f"{result.title}.flac"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
@@ -43,6 +45,14 @@ def process_link(link: str, output_dir: str) -> None:
     cp.get_default_memory_pool().free_all_blocks()
     cp.cuda.Stream.null.synchronize()
 
+    # Comprimir o flac
+    encoder = FileEncoder(
+        input_file=Path(flac_path),
+        output_file=Path(flac_path),
+        compression_level=8,
+        verify=True,
+    )
+    encoder.process()
     # ADicionando Thumbmail
     response: Final[requests.Response] = requests.get(result.thumbnail_url, timeout=10)
     response.raise_for_status()
@@ -66,6 +76,7 @@ def process_link(link: str, output_dir: str) -> None:
             Path(result.audio_path.replace(".mp3", ".webp")),
         ]
     )
+    exit(0)
 
 
 def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
@@ -80,5 +91,5 @@ def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
     ensure_directory_exists(output_dir)
     process_partial = partial(process_link, output_dir=output_dir)
 
-    with Pool(processes=3) as pool:
+    with Pool(processes=2) as pool:
         pool.map(process_partial, links)
