@@ -30,7 +30,7 @@ def process_link(link: str, output_dir: str) -> None:
     config = UpscaleConfig(
         input_file_path=result.audio_path,
         output_file_path=flac_path,
-        source_format="ogg",
+        source_format="mp3",
         target_format="flac",
         max_iterations=3_000,
         threshold_value=0.6,
