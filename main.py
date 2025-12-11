@@ -11,6 +11,12 @@ if __name__ == "__main__":
         "https://www.youtube.com/watch?v=voGfr0LeCYk",
         "https://www.youtube.com/watch?v=BjJlBiHYUak",
         "https://www.youtube.com/watch?v=Hjs0mArKmrE",
+        "https://www.youtube.com/watch?v=Z9PM5gjwN1U",
+        "https://www.youtube.com/watch?v=Nw1uB_ttKt8",
+        "https://www.youtube.com/watch?v=Cy44ocuoWhE",
+        "https://www.youtube.com/watch?v=YLJbYcX5LWk",
+        "https://www.youtube.com/watch?v=ZMHgW1CDono",
+        "https://www.youtube.com/watch?v=75P0QGi3RO0",
     ]
     youtube_links = list(map(clean_youtube_url, youtube_links))
     process_youtube_links(youtube_links, output_dir="./output")
