@@ -27,12 +27,13 @@ def process_link(link: str, output_dir: str) -> None:
     print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
     # Melhorando musica
-    flac_path = output_dir + "/" + f"{result.title}.flac"
+    wav_path = output_dir + "/" + f"{result.title}.wav"
+    flac_path = output_dir + "/" + f"{result.title}.flc"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
-        output_file_path=flac_path,
+        output_file_path=wav_path,
         source_format="mp3",
-        target_format="flac",
+        target_format="wav",
         max_iterations=1_000,
         threshold_value=0.6,
         target_bitrate_kbps=1411,
@@ -47,7 +48,7 @@ def process_link(link: str, output_dir: str) -> None:
 
     # Comprimir o flac
     encoder = FileEncoder(
-        input_file=Path(flac_path),
+        input_file=Path(wav_path),
         output_file=Path(flac_path),
         compression_level=8,
         verify=True,
