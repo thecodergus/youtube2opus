@@ -4,7 +4,8 @@ from src.downloader import download_audio
 from src.types import DownloadResult
 from src.utils import ensure_directory_exists, cleanup_temp_files
 
-from .feed import upscale, UpscaleConfig
+from .fat.pipeline import upscale, UpscaleConfig
+from .fat.types import AudioTypes
 from multiprocessing import Pool
 from functools import partial
 from typing import Final
@@ -23,15 +24,15 @@ def process_link(link: str, output_dir: str) -> None:
 
     # Baixando mp3
     result: DownloadResult = download_audio(link, output_dir)
-    print(f"  ⬇️  Baixado: {result.audio_path.title}")
+    print(f"  ⬇️  Baixado: {str(result.audio_path.title)}")
 
     # Melhorando musica
     flac_path = output_dir + "/" + f"{result.title}.flac"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
         output_file_path=flac_path,
-        source_format="mp3",
-        target_format="flac",
+        source_format=AudioTypes.MP3,
+        target_format=AudioTypes.FLAC,
         max_iterations=3_000,
         threshold_value=0.6,
         target_bitrate_kbps=1411,
