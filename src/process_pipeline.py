@@ -14,7 +14,6 @@ import requests
 import mimetypes
 import multiprocessing as mp
 import cupy as cp
-from pyflac import FileEncoder
 
 
 def process_link(link: str, output_dir: str) -> None:
@@ -27,14 +26,13 @@ def process_link(link: str, output_dir: str) -> None:
     print(f"  ⬇️  Baixado: {result.audio_path.title}")
 
     # Melhorando musica
-    wav_path = output_dir + "/" + f"{result.title}.wav"
     flac_path = output_dir + "/" + f"{result.title}.flac"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
-        output_file_path=wav_path,
+        output_file_path=flac_path,
         source_format="mp3",
-        target_format="wav",
-        max_iterations=1_000,
+        target_format="flac",
+        max_iterations=3_000,
         threshold_value=0.6,
         target_bitrate_kbps=1411,
         toggle_normalize=True,
@@ -46,15 +44,7 @@ def process_link(link: str, output_dir: str) -> None:
     cp.get_default_memory_pool().free_all_blocks()
     cp.cuda.Stream.null.synchronize()
 
-    # Comprimir o flac
-    encoder = FileEncoder(
-        input_file=Path(wav_path),
-        output_file=Path(flac_path),
-        compression_level=8,
-        verify=True,
-    )
-    encoder.process()
-    # ADicionando Thumbmail
+    # Adicionando Thumbmail
     response: Final[requests.Response] = requests.get(result.thumbnail_url, timeout=10)
     response.raise_for_status()
     image_data: Final[bytes] = response.content
@@ -73,7 +63,6 @@ def process_link(link: str, output_dir: str) -> None:
     # Limpeza de arquivos temporários
     cleanup_temp_files(
         [
-            Path(wav_path),
             Path(result.audio_path),
             Path(result.audio_path.replace(".mp3", ".webp")),
         ]

@@ -130,7 +130,8 @@ def write_audio(file_path: str, sample_rate: int, data: NpArray, fmt: str) -> No
                 data.astype(np.float32),
                 sample_rate,
                 format="FLAC",
-                subtype="PCM_32",
+                subtype="PCM_24",
+                compression_level=1,
             )
         case "wav":
             sf.write(
