@@ -230,7 +230,6 @@ def chunked_block_lms_filter(
     """
     n: int = len(signal)
     filtered_signal: CpArray = cp.zeros(n, dtype=cp.float32)
-    w: CpArray = cp.zeros(num_taps, dtype=cp.float32)
     for chunk_start in range(0, n, chunk_size):
         chunk_end = min(chunk_start + chunk_size, n)
         filtered_signal[chunk_start:chunk_end] = lms_filter(
