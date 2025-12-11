@@ -131,7 +131,6 @@ def write_audio(file_path: str, sample_rate: int, data: NpArray, fmt: str) -> No
                 sample_rate,
                 format="FLAC",
                 subtype="PCM_32",
-                compression_level=1,
             )
         case "wav":
             sf.write(
@@ -140,7 +139,6 @@ def write_audio(file_path: str, sample_rate: int, data: NpArray, fmt: str) -> No
                 sample_rate,
                 format="WAV",
                 subtype="PCM_32",
-                compression_level=1,
             )
         case _:
             raise ValueError(f"Formato de saída não suportado: {fmt}")

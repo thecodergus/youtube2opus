@@ -28,7 +28,7 @@ def process_link(link: str, output_dir: str) -> None:
 
     # Melhorando musica
     wav_path = output_dir + "/" + f"{result.title}.wav"
-    flac_path = output_dir + "/" + f"{result.title}.flc"
+    flac_path = output_dir + "/" + f"{result.title}.flac"
     config = UpscaleConfig(
         input_file_path=result.audio_path,
         output_file_path=wav_path,
@@ -73,11 +73,11 @@ def process_link(link: str, output_dir: str) -> None:
     # Limpeza de arquivos temporários
     cleanup_temp_files(
         [
+            Path(wav_path),
             Path(result.audio_path),
             Path(result.audio_path.replace(".mp3", ".webp")),
         ]
     )
-    exit(0)
 
 
 def process_youtube_links(links: Sequence[str], output_dir: str) -> None:
